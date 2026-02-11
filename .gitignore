@@ -2,6 +2,9 @@
 cache/
 out/
 
+# git files
+lib/
+
 # Ignores development broadcast logs
 !/broadcast
 /broadcast/*/31337/
