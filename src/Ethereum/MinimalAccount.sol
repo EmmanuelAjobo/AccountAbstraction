@@ -22,6 +22,7 @@ pragma solidity ^0.8.24;
  * This contract is intentionally minimal for learning and extension.
  */
 
+
 import {IAccount} from "@account-abstraction/interfaces/IAccount.sol";
 import {PackedUserOperation} from "@account-abstraction/interfaces/PackedUserOperation.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
@@ -31,7 +32,6 @@ import {SIG_VALIDATION_FAILED, SIG_VALIDATION_SUCCESS} from "@account-abstractio
 import {IEntryPoint} from "@account-abstraction/interfaces/IEntryPoint.sol";
 
 contract MinimalAccount is IAccount, Ownable {
-
     ////////////////////////////////////////////////////////////////
     //                           STATE
     ////////////////////////////////////////////////////////////////
@@ -61,20 +61,33 @@ contract MinimalAccount is IAccount, Ownable {
     ////////////////////////////////////////////////////////////////
 
     modifier requireFromEntryPoint() {
-        if (msg.sender != address(i_entryPoint)) {
-            revert MinimalAccount_NotEntryPoint();
-        }
+        _requireFromEntryPoint();
         _;
     }
 
     modifier requireFromEntryPointOrOwner() {
-        if (msg.sender != address(i_entryPoint) && msg.sender != owner()) {
-            revert MinimalAccount_NotEntryPointOrOwner();
-        }
+        _requireFromEntryPointOrOwner();
         _;
     }
 
-    receive() external payable{}
+    receive() external payable {}
+
+    ////////////////////////////////////////////////////////////////
+    //                    Wrapped Modifier logic
+    ////////////////////////////////////////////////////////////////
+    /** * @notice Wrapped modifier logic to allow both EntryPoint and owner calls. * @dev Used for functions that can be called by either the EntryPoint or the owner. */
+
+    function _requireFromEntryPoint() internal view {
+        if (msg.sender != address(i_entryPoint)) {
+            revert MinimalAccount_NotEntryPoint();
+        }
+    }
+
+    function _requireFromEntryPointOrOwner() internal view {
+        if (msg.sender != address(i_entryPoint) && msg.sender != owner()) {
+            revert MinimalAccount_NotEntryPointOrOwner();
+        }
+    }
 
     ////////////////////////////////////////////////////////////////
     //                    ERC-4337 VALIDATION
@@ -88,11 +101,7 @@ contract MinimalAccount is IAccount, Ownable {
         PackedUserOperation calldata userOp,
         bytes32 userOpHash,
         uint256 missingAccountFunds
-    )
-        external
-        requireFromEntryPoint
-        returns (uint256 validationData)
-    {
+    ) external requireFromEntryPoint returns (uint256 validationData) {
         // Validate signature
         validationData = _validateSignature(userOp, userOpHash);
 
@@ -106,8 +115,9 @@ contract MinimalAccount is IAccount, Ownable {
 
     function _payPrefund(uint256 _missingAccountFunds) internal {
         if (_missingAccountFunds != 0) {
-            (bool success,) =
-                payable(msg.sender).call{value: _missingAccountFunds}("");
+            (bool success, ) = payable(msg.sender).call{
+                value: _missingAccountFunds
+            }("");
 
             if (!success) {
                 revert MinimalAccount_PrefundFailed();
@@ -122,16 +132,12 @@ contract MinimalAccount is IAccount, Ownable {
     function _validateSignature(
         PackedUserOperation calldata userOp,
         bytes32 userOpHash
-    )
-        internal
-        view
-        returns (uint256)
-    {
-        bytes32 ethSignedMessageHash =
-            MessageHashUtils.toEthSignedMessageHash(userOpHash);
+    ) internal view returns (uint256) {
+        bytes32 ethSignedMessageHash = MessageHashUtils.toEthSignedMessageHash(
+            userOpHash
+        );
 
-        address signer =
-            ECDSA.recover(ethSignedMessageHash, userOp.signature);
+        address signer = ECDSA.recover(ethSignedMessageHash, userOp.signature);
 
         if (signer != owner()) {
             return SIG_VALIDATION_FAILED;
@@ -151,12 +157,8 @@ contract MinimalAccount is IAccount, Ownable {
         address dest,
         uint256 value,
         bytes calldata funcData
-    )
-        external
-        requireFromEntryPoint
-    {
-        (bool success, bytes memory result) =
-            dest.call{value: value}(funcData);
+    ) external requireFromEntryPointOrOwner {
+        (bool success, bytes memory result) = dest.call{value: value}(funcData);
 
         if (!success) {
             revert MinimalAccount_CallFailed(result);
@@ -171,4 +173,3 @@ contract MinimalAccount is IAccount, Ownable {
         return address(i_entryPoint);
     }
 }
-
