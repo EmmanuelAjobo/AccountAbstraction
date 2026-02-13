@@ -37,7 +37,7 @@ contract MinimalAccount is IAccount, Ownable {
     ////////////////////////////////////////////////////////////////
 
     /// @notice Immutable trusted EntryPoint
-    IEntryPoint public immutable i_entryPoint;
+    IEntryPoint public immutable I_ENTRY_POINT;
 
     ////////////////////////////////////////////////////////////////
     //                           ERRORS
@@ -53,7 +53,7 @@ contract MinimalAccount is IAccount, Ownable {
     ////////////////////////////////////////////////////////////////
 
     constructor(address entryPoint) Ownable(msg.sender) {
-        i_entryPoint = IEntryPoint(entryPoint);
+        I_ENTRY_POINT = IEntryPoint(entryPoint);
     }
 
     ////////////////////////////////////////////////////////////////
@@ -78,13 +78,13 @@ contract MinimalAccount is IAccount, Ownable {
     /** * @notice Wrapped modifier logic to allow both EntryPoint and owner calls. * @dev Used for functions that can be called by either the EntryPoint or the owner. */
 
     function _requireFromEntryPoint() internal view {
-        if (msg.sender != address(i_entryPoint)) {
+        if (msg.sender != address(I_ENTRY_POINT)) {
             revert MinimalAccount_NotEntryPoint();
         }
     }
 
     function _requireFromEntryPointOrOwner() internal view {
-        if (msg.sender != address(i_entryPoint) && msg.sender != owner()) {
+        if (msg.sender != address(I_ENTRY_POINT) && msg.sender != owner()) {
             revert MinimalAccount_NotEntryPointOrOwner();
         }
     }
@@ -123,6 +123,7 @@ contract MinimalAccount is IAccount, Ownable {
                 revert MinimalAccount_PrefundFailed();
             }
         }
+        
     }
 
     /**
@@ -170,6 +171,6 @@ contract MinimalAccount is IAccount, Ownable {
     ////////////////////////////////////////////////////////////////
 
     function getEntryPoint() external view returns (address) {
-        return address(i_entryPoint);
+        return address(I_ENTRY_POINT);
     }
 }

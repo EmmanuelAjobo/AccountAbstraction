@@ -2,7 +2,6 @@
 pragma solidity ^0.8.24;
 
 import {Script, console2} from "forge-std/Script.sol";
-import {MinimalAccount} from "src/Ethereum/MinimalAccount.sol";
 import {EntryPoint} from "@account-abstraction/core/EntryPoint.sol";
 
 
@@ -19,8 +18,10 @@ contract HelperConfig is Script {
     uint256 constant ETH_SEPOLIA_CHAIN_ID = 11155111;
     uint256 constant ZKSYNC_SEPOLIA_CHAIN_ID = 300;
     uint256 constant LOCAL_CHAIN_ID = 31337;
-    address constant FOUNDRY_DEFAULT_WALLET = 0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38;
     address constant BURNER_WALLET = 0x9Fa2795440B8ED8a1285aA703C710e7b4D7b4439;
+    // address constant FOUNDRY_DEFAULT_WALLET = 0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38;
+    // We are working with Anvil wallet instead
+    address constant ANVIL_DEFAULT_ACCOUNT = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
 
     NetworkConfig public localNetworkConfig;
 
@@ -65,6 +66,7 @@ contract HelperConfig is Script {
 
     function getOrCreateAnvilEthConfig() public returns (NetworkConfig memory) {
 
+
         if(localNetworkConfig.account != address(0)){
             return localNetworkConfig;
         }
@@ -72,12 +74,14 @@ contract HelperConfig is Script {
         /// Deploy mocks
 
         console2.log("Deploying Mocks");
-        vm.startBroadcast(FOUNDRY_DEFAULT_WALLET);
+        
+        vm.startBroadcast(ANVIL_DEFAULT_ACCOUNT);
         EntryPoint entryPoint = new EntryPoint();
         vm.stopBroadcast();
 
+        localNetworkConfig = NetworkConfig({entryPoint: address(entryPoint), account: ANVIL_DEFAULT_ACCOUNT});
 
-        return NetworkConfig({entryPoint: address(entryPoint), account: FOUNDRY_DEFAULT_WALLET});
+        return localNetworkConfig;
     }
 
 }

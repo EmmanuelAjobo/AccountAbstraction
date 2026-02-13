@@ -2,11 +2,12 @@
 pragma solidity ^0.8.24;
 
 import {Script} from "forge-std/Script.sol";
-import {MinimalAccount} from "src/Ethereum/MinimalAccount.sol";
 import {PackedUserOperation} from "@account-abstraction/interfaces/PackedUserOperation.sol";
 import {HelperConfig} from "script/HelperConfig.sol";
 import {IEntryPoint} from "@account-abstraction/interfaces/IEntryPoint.sol";
+import {EntryPoint} from "@account-abstraction/core/EntryPoint.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+
 
 
 // We need to generate the signature in the packed user Ops
@@ -19,14 +20,15 @@ contract SendPackedUserOp is Script {
 
     function run()  public {}
 
-    function generateSignedUSerOperation(bytes memory callData, HelperConfig.NetworkConfig memory config )  public view returns(PackedUserOperation memory){
-        uint256 nonce = vm.getNonce(config.account);
+    function generateSignedUSerOperation(bytes memory callData, HelperConfig.NetworkConfig memory config, address minimalAcc)  public view returns(PackedUserOperation memory){
+
+        uint256 nonce = IEntryPoint(config.entryPoint).getNonce(minimalAcc, 0);
 
         // 1. Generate the unsigned data
-        PackedUserOperation memory UserOp =  _generateUnsignedUserOp(callData, config.account, nonce);
+        PackedUserOperation memory userOp =  _generateUnsignedUserOp(callData, minimalAcc, nonce);
 
         // 2. Get the userOp hash
-        bytes32 userOpHash = IEntryPoint(config.entryPoint).getUserOpHash(UserOp);  
+        bytes32 userOpHash = IEntryPoint(config.entryPoint).getUserOpHash(userOp);  
         // from openzepllin
         bytes32 digest = userOpHash.toEthSignedMessageHash();
 
@@ -34,12 +36,24 @@ contract SendPackedUserOp is Script {
         // vm.sign(vm.envUint(PRIVATE_KEY), digest);
 
         // If you have a private key unlocked
+
+        uint8 v;
+        bytes32 r;
+        bytes32 s;
+        uint256 ANVIL_DEFAULT_KEY = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
+        
+        // If we are on a local chain
+        if (block.chainid == 31337){
+            (v, r, s ) = vm.sign(ANVIL_DEFAULT_KEY, digest);
+        } else {
         // foundry will check if it has that key unlocked for that address
-        (uint8 v, bytes32 r, bytes32 s)= vm.sign(config.account, digest);
+            (v, r, s)= vm.sign(config.account, digest);
+        }
 
-        UserOp.signature = abi.encodePacked(r, s, v); // NOTE THE ORDER r s v
 
-        return UserOp;
+        userOp.signature = abi.encodePacked(r, s, v); // NOTE THE ORDER r s v
+
+        return userOp;
     }
 
     // This is gonna generate the list of the packed user op except from the signature.
