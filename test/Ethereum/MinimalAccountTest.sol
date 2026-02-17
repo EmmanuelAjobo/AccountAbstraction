@@ -75,47 +75,128 @@ contract MinimalAccountTest is Test {
     }
 
     function testNonOwnerCannotExecuteCommands() public {
-        //Arrange
+        /**
+         * ===============================================================
+         *                         TEST GOAL
+         * ===============================================================
+         *
+         * Ensure that ONLY the owner OR the EntryPoint can trigger execution.
+         *
+         * This is a core authorization boundary.
+         *
+         * If this fails → your smart account becomes a public hot wallet.
+         */
+
+        // ===============================================================
+        // Arrange
+        // ===============================================================
+
+        // Anchor the test in a known starting state.
         assertEq(usdc.balanceOf(address(minimalAccount)), 0);
+
         address dest = address(usdc);
         uint256 value = 0;
+
+        /**
+         * Encode a mint call that would clearly mutate state.
+         * Using a high-signal action makes unauthorized execution obvious.
+         */
         bytes memory funcData = abi.encodeWithSelector(
             ERC20Mock.mint.selector,
             address(minimalAccount),
             AMOUNT
-        ); // Learn
+        );
 
-        // Act
+        // ===============================================================
+        // Act + Assert (Revert Expected)
+        // ===============================================================
+
+        /**
+         * SECURITY LESSON:
+         * Always set expectRevert BEFORE the call.
+         * Foundry only watches the next external interaction.
+         */
         vm.prank(user1);
+
+        /**
+         * Custom errors are superior to string reverts:
+         *
+         * ✅ cheaper gas
+         * ✅ strongly typed
+         * ✅ harder to spoof
+         */
         vm.expectRevert(
             MinimalAccount.MinimalAccount_NotEntryPointOrOwner.selector
         );
+
         minimalAccount.execute(dest, value, funcData);
 
-        // Assert
-
+        /**
+         * Post-condition:
+         * No tokens should exist.
+         *
+         * Never trust a revert alone — always verify state.
+         */
         assertEq(usdc.balanceOf(address(minimalAccount)), 0);
     }
 
     // We need to test we are signing correctly,
     // We need to code our calldata that tells the entry point contract to call our contract and then have our contract  call USDC
+
     function testRecoverSignedOp() public {
+        /**
+         * ===============================================================
+         *                         TEST GOAL
+         * ===============================================================
+         *
+         * Confirm that the signature embedded inside the UserOperation
+         * truly belongs to the smart account owner.
+         *
+         * This test protects the MOST critical trust primitive:
+         *
+         *              cryptographic identity
+         *
+         * If signature recovery is wrong,
+         * the wallet can authorize attackers.
+         */
+
+        // ===============================================================
         // Arrange
+        // ===============================================================
+
         assertEq(usdc.balanceOf(address(minimalAccount)), 0);
+
         address dest = address(usdc);
         uint256 value = 0;
+
+        /**
+         * Nested calldata structure:
+         *
+         * EntryPoint → SmartAccount.execute → ERC20.mint
+         *
+         * Train yourself to visualize call stacks.
+         * Auditors mentally simulate execution.
+         */
         bytes memory funcData = abi.encodeWithSelector(
             ERC20Mock.mint.selector,
             address(minimalAccount),
             AMOUNT
-        ); // Learn
+        );
+
         bytes memory executeCallData = abi.encodeWithSelector(
             MinimalAccount.execute.selector,
             dest,
             value,
             funcData
-        ); // Learn
+        );
 
+        /**
+         * Generate a signed UserOperation.
+         *
+         * IMPORTANT:
+         * Never manually hash UserOps in production systems.
+         * Always defer to EntryPoint.
+         */
         PackedUserOperation memory userOp = sendPackedUserOp
             .generateSignedUSerOperation(
                 executeCallData,
@@ -125,14 +206,35 @@ contract MinimalAccountTest is Test {
 
         bytes32 userOpHash = IEntryPoint(helperConfig.getConfig().entryPoint)
             .getUserOpHash(userOp);
+
+        // ===============================================================
         // Act
+        // ===============================================================
+
+        /**
+         * Convert to an Ethereum signed message hash.
+         *
+         * This mirrors how wallets sign data off-chain.
+         *
+         * SECURITY INSIGHT:
+         * Hash domain mistakes are a top source
+         * of smart account vulnerabilities.
+         */
         address actualSigner = ECDSA.recover(
             userOpHash.toEthSignedMessageHash(),
             userOp.signature
         );
 
+        // ===============================================================
         // Assert
+        // ===============================================================
 
+        /**
+         * The recovered signer MUST equal the owner.
+         *
+         * Anything else means signature validation
+         * is fundamentally broken.
+         */
         assertEq(actualSigner, minimalAccount.owner());
     }
 
@@ -355,8 +457,6 @@ contract MinimalAccountTest is Test {
         vm.deal(minimalAccount.owner(), 10 ether);
         vm.deal(FOUNDRY_DEFAULT_WALLET, 10 ether);
 
-
-
         vm.prank(minimalAccount.owner());
         IEntryPoint(helperConfig.getConfig().entryPoint).depositTo{
             value: 10 ether
@@ -380,7 +480,7 @@ contract MinimalAccountTest is Test {
         PackedUserOperation[] memory userOpList = new PackedUserOperation[](1);
         userOpList[0] = userOp;
 
-console2.log("Start");
+        console2.log("Start");
 
         vm.startPrank(FOUNDRY_DEFAULT_WALLET);
         IEntryPoint(helperConfig.getConfig().entryPoint).handleOps(
@@ -388,9 +488,6 @@ console2.log("Start");
             payable(FOUNDRY_DEFAULT_WALLET)
         );
         vm.stopPrank();
-
-
-        
 
         // ===============================================================
         // Assert
